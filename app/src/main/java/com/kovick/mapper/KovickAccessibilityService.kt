@@ -20,6 +20,12 @@ import android.widget.Toast
 import kotlin.math.max
 import kotlin.math.min
 
+/**
+ * Kovick's runtime mapper.
+ *
+ * The service owns the overlay and input pipeline. Mapping data is kept per
+ * game package so switching games never mixes control profiles.
+ */
 class KovickAccessibilityService : AccessibilityService() {
     private var wm: WindowManager? = null
     private var kovickButton: View? = null
@@ -31,46 +37,56 @@ class KovickAccessibilityService : AccessibilityService() {
     private var pendingY = -1f
     private var mapperEnabled = true
     private var aimEnabled = false
+    private var activePackage = ""
 
     private val prefs by lazy { getSharedPreferences("kovick_profiles", MODE_PRIVATE) }
+    private val store by lazy { KovickProfileStore(this) }
+    private val router by lazy { KovickInputRouter(this) }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         mapperEnabled = prefs.getBoolean("enabled", true)
+        activePackage = prefs.getString("selected_game", "") ?: ""
         showKovickButton()
+        runCatching {
+            startForegroundService(Intent(this, KovickForegroundController::class.java))
+        }
+    }
+
+    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) {
+        val packageName = event?.packageName?.toString() ?: return
+        if (packageName != packageNameOfSelf()) activePackage = packageName
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
-        if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount > 0) return false
+        if (!mapperEnabled) return false
 
         if (mappingArmed && pendingX >= 0f) {
-            prefs.edit().putString("map_${event.keyCode}", "$pendingX,$pendingY").apply()
-            mappingArmed = false
-            pendingX = -1f
-            pendingY = -1f
-            removeMappingOverlay()
-            toast("Tecla ${KeyEvent.keyCodeToString(event.keyCode)} mapeada")
+            val target = currentTargetPackage()
+            if (target.isNotEmpty()) {
+                store.put(target, event.keyCode, KovickProfileStore.Mapping(pendingX, pendingY))
+                mappingArmed = false
+                pendingX = -1f
+                pendingY = -1f
+                removeMappingOverlay()
+                toast("${KeyEvent.keyCodeToString(event.keyCode)} mapeada neste jogo")
+            }
             return true
         }
 
-        if (!mapperEnabled) return false
-        val raw = prefs.getString("map_${event.keyCode}", null) ?: return false
-        val parts = raw.split(',')
-        if (parts.size != 2) return false
-        val x = parts[0].toFloatOrNull() ?: return false
-        val y = parts[1].toFloatOrNull() ?: return false
-        tap(x, y)
-        return true
+        if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount > 0) return false
+        val target = currentTargetPackage()
+        if (target.isEmpty()) return false
+        return router.handleKey(target, event)
     }
 
-    private fun tap(x: Float, y: Float) {
-        val path = Path().apply { moveTo(x, y) }
-        val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0, 45))
-            .build()
-        dispatchGesture(gesture, null, null)
+    private fun currentTargetPackage(): String {
+        if (activePackage.isNotEmpty() && activePackage != packageNameOfSelf()) return activePackage
+        return prefs.getString("selected_game", "") ?: ""
     }
+
+    private fun packageNameOfSelf() = packageName
 
     private fun showKovickButton() {
         if (kovickButton != null) return
@@ -107,7 +123,7 @@ class KovickAccessibilityService : AccessibilityService() {
         }
         val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         val title = TextView(this).apply {
-            text = "KOVICK  •  ALPHA"
+            text = "KOVICK"
             textSize = 16f; setTextColor(Color.WHITE)
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         }
@@ -117,7 +133,7 @@ class KovickAccessibilityService : AccessibilityService() {
         }
         header.addView(title, LinearLayout.LayoutParams(0, 48, 1f)); header.addView(close, LinearLayout.LayoutParams(48, 48)); root.addView(header)
         val status = TextView(this).apply {
-            text = "Teclas → toques reais  •  mouse → modo mira"
+            text = if (currentTargetPackage().isEmpty()) "Nenhum jogo selecionado" else "Perfil ativo: ${currentTargetPackage()}"
             textSize = 12f; setTextColor(Color.rgb(175,175,190)); setPadding(2,0,2,12)
         }
         root.addView(status)
@@ -134,9 +150,9 @@ class KovickAccessibilityService : AccessibilityService() {
             removePanel(); showPanel()
         }
         addButton(root, "⚙  SENSIBILIDADE DA MIRA", Color.rgb(42,42,55)) { adjustSensitivity() }
-        addButton(root, "🧹  LIMPAR MAPAS", Color.rgb(70,38,45)) {
-            prefs.edit().clear().putBoolean("enabled", mapperEnabled).apply()
-            toast("Mapeamentos apagados"); removePanel(); showPanel()
+        addButton(root, "🧹  LIMPAR PERFIL", Color.rgb(70,38,45)) {
+            clearCurrentProfile()
+            toast("Perfil atual limpo"); removePanel(); showPanel()
         }
 
         val bottom = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0,10,0,0) }
@@ -151,6 +167,15 @@ class KovickAccessibilityService : AccessibilityService() {
         p.gravity = Gravity.TOP or Gravity.END; p.x=24; p.y=100
         root.setOnTouchListener(createDragListener(p))
         runCatching { wm?.addView(root,p); panel=root }.onFailure { toast("Não foi possível abrir o painel") }
+    }
+
+    private fun clearCurrentProfile() {
+        val target = currentTargetPackage()
+        if (target.isEmpty()) return
+        val prefix = store.profileKey(target)
+        prefs.edit().apply {
+            for (key in prefs.all.keys) if (key.startsWith(prefix)) remove(key)
+        }.apply()
     }
 
     private fun armMapping() {
@@ -180,9 +205,11 @@ class KovickAccessibilityService : AccessibilityService() {
     private fun removeMappingOverlay() { mappingOverlay?.let { runCatching { wm?.removeView(it) } }; mappingOverlay=null }
 
     private fun adjustSensitivity() {
-        val current = prefs.getFloat("sensitivity", 1.0f)
+        val target = currentTargetPackage()
+        if (target.isEmpty()) return
+        val current = store.sensitivity(target)
         val next = if (current >= 2.0f) 0.5f else current + 0.25f
-        prefs.edit().putFloat("sensitivity", next).apply()
+        store.setSensitivity(target, next)
         toast("Sensibilidade: ${"%.2f".format(next)}x")
     }
 
@@ -211,7 +238,6 @@ class KovickAccessibilityService : AccessibilityService() {
     private fun toast(s:String)=Toast.makeText(this,s,Toast.LENGTH_SHORT).show()
     private fun roundedBackground(c:Int,r:Float)=GradientDrawable().apply{setColor(c);cornerRadius=r}
 
-    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) {}
     override fun onInterrupt() {}
     override fun onDestroy(){removePanel();removeAimOverlay();removeMappingOverlay();removeKovickButton();super.onDestroy()}
 
@@ -234,7 +260,7 @@ class KovickAccessibilityService : AccessibilityService() {
         }
         override fun onTouchEvent(e:MotionEvent):Boolean = false
         private fun moveCamera(dx:Float,dy:Float){
-            val s=prefs.getFloat("sensitivity",1.0f)
+            val s=store.sensitivity(currentTargetPackage())
             val cx=resources.displayMetrics.widthPixels/2f; val cy=resources.displayMetrics.heightPixels/2f
             val ex=cx+max(-180f,min(180f,dx*s*3f)); val ey=cy+max(-120f,min(120f,dy*s*3f))
             val path=Path().apply{moveTo(cx,cy);lineTo(ex,ey)}
