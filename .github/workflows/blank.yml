@@ -21,19 +21,10 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Find Android SDK
-        shell: bash
-        run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f -print
-
       - name: Install Android SDK packages
         shell: bash
         run: |
           SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n 1)
-          chmod +x "$SDKMANAGER"
-          yes | "$SDKMANAGER" --licenses || true
           "$SDKMANAGER" "platform-tools"
           "$SDKMANAGER" "platforms;android-35"
           "$SDKMANAGER" "build-tools;35.0.0"
