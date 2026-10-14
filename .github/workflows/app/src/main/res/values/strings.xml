@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Kovick Mapper</string>
+    <string name="accessibility_description">Kovick Mapper usa o serviço de acessibilidade para executar os gestos configurados pelo usuário.</string>
+</resources>
