@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
+import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -59,6 +60,18 @@ class MainActivity : ComponentActivity() {
                     packageManager = packageManager,
                     openEditorInitially = openEditor,
                     onAccessibility = { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
+                    onRestrictedSettings = {
+                        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.parse("package:$packageName")
+                        })
+                    },
+                    onWirelessDebugging = {
+                        try {
+                            startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+                        } catch (_: Exception) {
+                            startActivity(Intent(Settings.ACTION_SETTINGS))
+                        }
+                    },
                     onAndroidSettings = { startActivity(Intent(Settings.ACTION_SETTINGS)) },
                     onLaunchGame = ::launchGame
                 )
@@ -95,6 +108,8 @@ private fun KovickMapperApp(
     packageManager: PackageManager,
     openEditorInitially: Boolean,
     onAccessibility: () -> Unit,
+    onRestrictedSettings: () -> Unit,
+    onWirelessDebugging: () -> Unit,
     onAndroidSettings: () -> Unit,
     onLaunchGame: (String) -> Unit
 ) {
@@ -115,15 +130,8 @@ private fun KovickMapperApp(
                     if (selectedTab != 0) IconButton({ selectedTab = 0 }) { Icon(Icons.Default.ArrowBack, "Voltar") }
                 },
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primary) {
-                            Text("K", Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = Color.White)
-                        }
-                        Spacer(Modifier.width(10.dp))
-                        Column {
-                            Text("KOVICK", fontWeight = FontWeight.Black)
-                            Text("MAPPER V2 • LANDSCAPE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-                        }
+                    Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primary) {
+                        Text("K", Modifier.padding(horizontal = 14.dp, vertical = 5.dp), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = Color.White)
                     }
                 },
                 actions = { IconButton({ selectedTab = 2 }) { Icon(Icons.Default.Settings, "Configurações") } }
@@ -134,9 +142,9 @@ private fun KovickMapperApp(
             0 -> HomeScreen(padding, selectedGame, games, { showGamePicker = true }, {
                 selectedGame = it
                 saveSelectedPackage(context, it.packageName)
-            }, onLaunchGame, { selectedTab = 1 }, onAccessibility)
+            }, onLaunchGame, { selectedTab = 1 }, onAccessibility, onRestrictedSettings, onWirelessDebugging)
             1 -> EditorScreen(padding, selectedGame)
-            else -> SettingsScreen(padding, onAccessibility, onAndroidSettings)
+            else -> SettingsScreen(padding, onAccessibility, onRestrictedSettings, onWirelessDebugging, onAndroidSettings)
         }
     }
 
@@ -160,7 +168,7 @@ private fun saveSelectedPackage(context: Context, packageName: String) {
 
 private fun loadLaunchableApps(packageManager: PackageManager): List<InstalledGame> {
     val intent = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_LAUNCHER) }
-    return packageManager.queryIntentActivities(intent, PackageManager.MATCH_ALL)
+    val apps = packageManager.queryIntentActivities(intent, PackageManager.MATCH_ALL)
         .asSequence()
         .filter { it.activityInfo.packageName != "com.kovick.mapper" }
         .mapNotNull { info ->
@@ -169,9 +177,26 @@ private fun loadLaunchableApps(packageManager: PackageManager): List<InstalledGa
             if (name.isBlank()) return@mapNotNull null
             InstalledGame(name, app.packageName, app.loadIcon(packageManager).toBitmapSafe(96), isLikelyGame(app, name))
         }
+        .toMutableList()
+
+    // Garante que o Free Fire apareça mesmo quando o launcher do sistema filtra a consulta.
+    val freeFirePackages = listOf("com.dts.freefireth", "com.dts.freefiremax")
+    for (pkg in freeFirePackages) {
+        if (apps.none { it.packageName == pkg }) {
+            val appInfo = runCatching { packageManager.getApplicationInfo(pkg, PackageManager.MATCH_ALL) }.getOrNull()
+            val launchIntent = packageManager.getLaunchIntentForPackage(pkg)
+            if (appInfo != null && launchIntent != null) {
+                val name = appInfo.loadLabel(packageManager).toString().trim()
+                if (name.isNotBlank()) {
+                    apps.add(InstalledGame(name, pkg, appInfo.loadIcon(packageManager).toBitmapSafe(96), true))
+                }
+            }
+        }
+    }
+
+    return apps
         .distinctBy { it.packageName }
         .sortedWith(compareByDescending<InstalledGame> { it.isGame }.thenBy { it.name.lowercase() })
-        .toList()
 }
 
 private fun isLikelyGame(app: ApplicationInfo, name: String): Boolean {
@@ -197,12 +222,14 @@ private fun HomeScreen(
     onSelectGame: (InstalledGame) -> Unit,
     onLaunchGame: (String) -> Unit,
     onOpenEditor: () -> Unit,
-    onAccessibility: () -> Unit
+    onAccessibility: () -> Unit,
+    onRestrictedSettings: () -> Unit,
+    onWirelessDebugging: () -> Unit
 ) {
     Row(Modifier.fillMaxSize().padding(padding).padding(22.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
         Card(Modifier.weight(1.15f).fillMaxHeight(), shape = RoundedCornerShape(26.dp)) {
             Column(Modifier.padding(24.dp)) {
-                Text("KOVICK MAPPER", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+                Text("KOVICK", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
                 Text("Seu perfil de controles, por jogo.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(20.dp))
                 if (selectedGame == null) EmptyGameState(onAddGame) else {
@@ -231,9 +258,14 @@ private fun HomeScreen(
                 }
                 Spacer(Modifier.weight(1f))
                 Text("PRIMEIRO USO", fontWeight = FontWeight.Bold)
-                Text("Ative a Acessibilidade para preparar o botão flutuante do mapper.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Se o Android bloquear a Acessibilidade, libere o acesso restrito nas informações do Kovick.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton(onAccessibility, Modifier.fillMaxWidth()) { Text("ATIVAR KOVICK") }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onAccessibility, Modifier.weight(1f)) { Text("ACESSIBILIDADE") }
+                    OutlinedButton(onRestrictedSettings, Modifier.weight(1f)) { Text("LIBERAR ACESSO") }
+                }
+                Spacer(Modifier.height(6.dp))
+                OutlinedButton(onWirelessDebugging, Modifier.fillMaxWidth()) { Text("DEPURAÇÃO SEM FIO / DESENVOLVEDOR") }
             }
         }
         Card(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(26.dp)) {
@@ -323,15 +355,22 @@ private fun RowScope.EditorCard(icon: ImageVector, title: String, subtitle: Stri
 }
 
 @Composable
-private fun SettingsScreen(padding: PaddingValues, onAccessibility: () -> Unit, onAndroidSettings: () -> Unit) {
+private fun SettingsScreen(
+    padding: PaddingValues,
+    onAccessibility: () -> Unit,
+    onRestrictedSettings: () -> Unit,
+    onWirelessDebugging: () -> Unit,
+    onAndroidSettings: () -> Unit
+) {
     Column(Modifier.fillMaxSize().padding(padding).padding(24.dp)) {
         Text("CONFIGURAÇÕES", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
         Spacer(Modifier.height(16.dp))
         Button(onClick = onAccessibility) { Text("ATIVAR ACESSIBILIDADE") }
         Spacer(Modifier.height(8.dp))
+        OutlinedButton(onClick = onRestrictedSettings) { Text("LIBERAR ACESSO RESTRITO") }
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(onClick = onWirelessDebugging) { Text("DEPURAÇÃO SEM FIO / DESENVOLVEDOR") }
+        Spacer(Modifier.height(8.dp))
         OutlinedButton(onClick = onAndroidSettings) { Text("CONFIGURAÇÕES DO ANDROID") }
-        Spacer(Modifier.height(20.dp))
-        Text("KovickMapper v2", fontWeight = FontWeight.Bold)
-        Text("Perfis individuais por pacote, overlay e editor visual são a base da próxima etapa.", color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
