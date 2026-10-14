@@ -2,6 +2,7 @@
 
 package com.kovick.mapper
 
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.ApplicationInfo
@@ -54,6 +55,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             KovickTheme {
                 KovickMapperApp(
+                    context = this@MainActivity,
                     packageManager = packageManager,
                     openEditorInitially = openEditor,
                     onAccessibility = { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
@@ -65,7 +67,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun launchGame(packageName: String) {
-        getSharedPreferences("kovick", MODE_PRIVATE).edit()
+        getSharedPreferences("kovick", MODE_PRIVATE)
+            .edit()
             .putString("selected_package", packageName)
             .apply()
         packageManager.getLaunchIntentForPackage(packageName)?.let { startActivity(it) }
@@ -88,6 +91,7 @@ private fun KovickTheme(content: @Composable () -> Unit) {
 
 @Composable
 private fun KovickMapperApp(
+    context: Context,
     packageManager: PackageManager,
     openEditorInitially: Boolean,
     onAccessibility: () -> Unit,
@@ -100,7 +104,7 @@ private fun KovickMapperApp(
     val games = remember(packageManager) { loadLaunchableApps(packageManager) }
 
     LaunchedEffect(games) {
-        val saved = getSelectedPackage()
+        val saved = getSelectedPackage(context)
         selectedGame = games.firstOrNull { it.packageName == saved }
     }
 
@@ -129,7 +133,7 @@ private fun KovickMapperApp(
         when (selectedTab) {
             0 -> HomeScreen(padding, selectedGame, games, { showGamePicker = true }, {
                 selectedGame = it
-                saveSelectedPackage(it.packageName)
+                saveSelectedPackage(context, it.packageName)
             }, onLaunchGame, { selectedTab = 1 }, onAccessibility)
             1 -> EditorScreen(padding, selectedGame)
             else -> SettingsScreen(padding, onAccessibility, onAndroidSettings)
@@ -138,16 +142,20 @@ private fun KovickMapperApp(
 
     if (showGamePicker) GamePickerDialog(games, { showGamePicker = false }) {
         selectedGame = it
-        saveSelectedPackage(it.packageName)
+        saveSelectedPackage(context, it.packageName)
         showGamePicker = false
     }
 }
 
-private fun ComponentActivity.getSelectedPackage(): String? =
-    getSharedPreferences("kovick", MODE_PRIVATE).getString("selected_package", null)
+private fun getSelectedPackage(context: Context): String? =
+    context.getSharedPreferences("kovick", Context.MODE_PRIVATE)
+        .getString("selected_package", null)
 
-private fun ComponentActivity.saveSelectedPackage(packageName: String) {
-    getSharedPreferences("kovick", MODE_PRIVATE).edit().putString("selected_package", packageName).apply()
+private fun saveSelectedPackage(context: Context, packageName: String) {
+    context.getSharedPreferences("kovick", Context.MODE_PRIVATE)
+        .edit()
+        .putString("selected_package", packageName)
+        .apply()
 }
 
 private fun loadLaunchableApps(packageManager: PackageManager): List<InstalledGame> {
