@@ -3,12 +3,17 @@
 package com.kovick.mapper
 
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.content.pm.ActivityInfo
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,7 +21,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Gamepad
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Mouse
@@ -27,100 +34,54 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 private data class InstalledGame(
     val name: String,
-    val packageName: String
+    val packageName: String,
+    val icon: Bitmap,
+    val isGame: Boolean
 )
 
 class MainActivity : ComponentActivity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        requestedOrientation =
-            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        val openEditor = intent.getBooleanExtra("open_editor", false)
         setContent {
             KovickTheme {
-
                 KovickMapperApp(
                     packageManager = packageManager,
-
-                    onAccessibility = {
-                        startActivity(
-                            Intent(
-                                Settings.ACTION_ACCESSIBILITY_SETTINGS
-                            )
-                        )
-                    },
-
-                    onAndroidSettings = {
-                        startActivity(
-                            Intent(Settings.ACTION_SETTINGS)
-                        )
-                    },
-
-                    onLaunchGame = {
-                        launchGame(it)
-                    }
+                    openEditorInitially = openEditor,
+                    onAccessibility = { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
+                    onAndroidSettings = { startActivity(Intent(Settings.ACTION_SETTINGS)) },
+                    onLaunchGame = ::launchGame
                 )
             }
         }
     }
 
     private fun launchGame(packageName: String) {
-
-        getSharedPreferences(
-            "kovick",
-            MODE_PRIVATE
-        )
-            .edit()
-            .putString(
-                "selected_package",
-                packageName
-            )
+        getSharedPreferences("kovick", MODE_PRIVATE).edit()
+            .putString("selected_package", packageName)
             .apply()
-
-        val launchIntent =
-            packageManager.getLaunchIntentForPackage(
-                packageName
-            )
-
-        if (launchIntent != null) {
-            startActivity(launchIntent)
-        }
+        packageManager.getLaunchIntentForPackage(packageName)?.let { startActivity(it) }
     }
 }
 
 @Composable
-private fun KovickTheme(
-    content: @Composable () -> Unit
-) {
-
+private fun KovickTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-
         colorScheme = darkColorScheme(
-
-            primary =
-                Color(0xFF8B5CF6),
-
-            secondary =
-                Color(0xFF22D3EE),
-
-            background =
-                Color(0xFF07070B),
-
-            surface =
-                Color(0xFF101017),
-
-            surfaceVariant =
-                Color(0xFF191923)
+            primary = Color(0xFF8B5CF6),
+            secondary = Color(0xFF22D3EE),
+            background = Color(0xFF07070B),
+            surface = Color(0xFF101017),
+            surfaceVariant = Color(0xFF191923)
         ),
-
         content = content
     )
 }
@@ -128,188 +89,95 @@ private fun KovickTheme(
 @Composable
 private fun KovickMapperApp(
     packageManager: PackageManager,
+    openEditorInitially: Boolean,
     onAccessibility: () -> Unit,
     onAndroidSettings: () -> Unit,
     onLaunchGame: (String) -> Unit
 ) {
+    var selectedGame by remember { mutableStateOf<InstalledGame?>(null) }
+    var showGamePicker by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableIntStateOf(if (openEditorInitially) 1 else 0) }
+    val games = remember(packageManager) { loadLaunchableApps(packageManager) }
 
-    var selectedGame by remember {
-        mutableStateOf<InstalledGame?>(null)
-    }
-
-    var showGamePicker by remember {
-        mutableStateOf(false)
-    }
-
-    var selectedTab by remember {
-        mutableIntStateOf(0)
-    }
-
-    val games = remember {
-        loadLaunchableApps(packageManager)
+    LaunchedEffect(games) {
+        val saved = getSelectedPackage()
+        selectedGame = games.firstOrNull { it.packageName == saved }
     }
 
     Scaffold(
-
         topBar = {
-
             CenterAlignedTopAppBar(
-
+                navigationIcon = {
+                    if (selectedTab != 0) IconButton({ selectedTab = 0 }) { Icon(Icons.Default.ArrowBack, "Voltar") }
+                },
                 title = {
-
-                    Column(
-                        horizontalAlignment =
-                            Alignment.CenterHorizontally
-                    ) {
-
-                        Text(
-                            "KOVICK",
-                            fontWeight =
-                                FontWeight.Black
-                        )
-
-                        Text(
-                            "MAPPER • LANDSCAPE",
-
-                            style =
-                                MaterialTheme.typography
-                                    .labelSmall,
-
-                            color =
-                                MaterialTheme.colorScheme
-                                    .secondary
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primary) {
+                            Text("K", Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = Color.White)
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text("KOVICK", fontWeight = FontWeight.Black)
+                            Text("MAPPER V2 • LANDSCAPE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                        }
                     }
                 },
-
-                actions = {
-
-                    IconButton(
-                        onClick = {
-                            selectedTab = 2
-                        }
-                    ) {
-
-                        Icon(
-                            Icons.Default.Settings,
-                            contentDescription =
-                                "Configurações"
-                        )
-                    }
-                }
+                actions = { IconButton({ selectedTab = 2 }) { Icon(Icons.Default.Settings, "Configurações") } }
             )
         }
-
     ) { padding ->
-
         when (selectedTab) {
-
-            0 -> HomeScreen(
-
-                padding = padding,
-
-                selectedGame =
-                    selectedGame,
-
-                games =
-                    games,
-
-                onAddGame = {
-                    showGamePicker = true
-                },
-
-                onSelectGame = {
-                    selectedGame = it
-                },
-
-                onLaunchGame = {
-                    onLaunchGame(it)
-                },
-
-                onAccessibility =
-                    onAccessibility
-            )
-
-            1 -> EditorScreen(
-                padding = padding
-            )
-
-            else -> SettingsScreen(
-                padding = padding,
-
-                onAccessibility =
-                    onAccessibility,
-
-                onAndroidSettings =
-                    onAndroidSettings
-            )
+            0 -> HomeScreen(padding, selectedGame, games, { showGamePicker = true }, {
+                selectedGame = it
+                saveSelectedPackage(it.packageName)
+            }, onLaunchGame, { selectedTab = 1 }, onAccessibility)
+            1 -> EditorScreen(padding, selectedGame)
+            else -> SettingsScreen(padding, onAccessibility, onAndroidSettings)
         }
     }
 
-    if (showGamePicker) {
-
-        GamePickerDialog(
-
-            games = games,
-
-            onDismiss = {
-                showGamePicker = false
-            },
-
-            onSelect = {
-
-                selectedGame = it
-
-                showGamePicker = false
-            }
-        )
+    if (showGamePicker) GamePickerDialog(games, { showGamePicker = false }) {
+        selectedGame = it
+        saveSelectedPackage(it.packageName)
+        showGamePicker = false
     }
 }
 
-private fun loadLaunchableApps(
-    packageManager: PackageManager
-): List<InstalledGame> {
+private fun ComponentActivity.getSelectedPackage(): String? =
+    getSharedPreferences("kovick", MODE_PRIVATE).getString("selected_package", null)
 
-    val intent =
-        Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_LAUNCHER)
-        }
+private fun ComponentActivity.saveSelectedPackage(packageName: String) {
+    getSharedPreferences("kovick", MODE_PRIVATE).edit().putString("selected_package", packageName).apply()
+}
 
-    return packageManager
-        .queryIntentActivities(
-            intent,
-            PackageManager.MATCH_ALL
-        )
+private fun loadLaunchableApps(packageManager: PackageManager): List<InstalledGame> {
+    val intent = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_LAUNCHER) }
+    return packageManager.queryIntentActivities(intent, PackageManager.MATCH_ALL)
         .asSequence()
-
-        .filter {
-            it.activityInfo.packageName !=
-                    "com.kovick.mapper"
+        .filter { it.activityInfo.packageName != "com.kovick.mapper" }
+        .mapNotNull { info ->
+            val app = info.activityInfo.applicationInfo ?: return@mapNotNull null
+            val name = app.loadLabel(packageManager).toString().trim()
+            if (name.isBlank()) return@mapNotNull null
+            InstalledGame(name, app.packageName, app.loadIcon(packageManager).toBitmapSafe(96), isLikelyGame(app, name))
         }
-
-        .map {
-
-            InstalledGame(
-
-                name =
-                    it.loadLabel(
-                        packageManager
-                    ).toString(),
-
-                packageName =
-                    it.activityInfo.packageName
-            )
-        }
-
-        .distinctBy {
-            it.packageName
-        }
-
-        .sortedBy {
-            it.name.lowercase()
-        }
-
+        .distinctBy { it.packageName }
+        .sortedWith(compareByDescending<InstalledGame> { it.isGame }.thenBy { it.name.lowercase() })
         .toList()
+}
+
+private fun isLikelyGame(app: ApplicationInfo, name: String): Boolean {
+    val text = name.lowercase()
+    val keywords = listOf("game", "jogo", "free fire", "roblox", "minecraft", "pubg", "fortnite", "call of duty")
+    return app.category == ApplicationInfo.CATEGORY_GAME || keywords.any(text::contains)
+}
+
+private fun Drawable.toBitmapSafe(size: Int): Bitmap {
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    setBounds(0, 0, size, size)
+    draw(canvas)
+    return bitmap
 }
 
 @Composable
@@ -320,662 +188,142 @@ private fun HomeScreen(
     onAddGame: () -> Unit,
     onSelectGame: (InstalledGame) -> Unit,
     onLaunchGame: (String) -> Unit,
+    onOpenEditor: () -> Unit,
     onAccessibility: () -> Unit
 ) {
-
-    Row(
-
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(22.dp),
-
-        horizontalArrangement =
-            Arrangement.spacedBy(20.dp)
-    ) {
-
-        Card(
-
-            modifier =
-                Modifier
-                    .weight(1.15f)
-                    .fillMaxHeight(),
-
-            shape =
-                RoundedCornerShape(28.dp)
-        ) {
-
-            Column(
-                modifier =
-                    Modifier.padding(24.dp)
-            ) {
-
-                Text(
-                    "KOVICK MAPPER",
-
-                    style =
-                        MaterialTheme.typography
-                            .headlineMedium,
-
-                    fontWeight =
-                        FontWeight.Black
-                )
-
-                Text(
-                    "Mapeamento em tela deitada",
-
-                    color =
-                        MaterialTheme.colorScheme
-                            .onSurfaceVariant
-                )
-
-                Spacer(
-                    Modifier.height(24.dp)
-                )
-
-                if (selectedGame == null) {
-
-                    EmptyGameState(
-                        onAddGame
-                    )
-
-                } else {
-
-                    Text(
-                        "JOGO SELECIONADO",
-
-                        color =
-                            MaterialTheme.colorScheme
-                                .secondary,
-
-                        fontWeight =
-                            FontWeight.Bold
-                    )
-
-                    Spacer(
-                        Modifier.height(6.dp)
-                    )
-
-                    Text(
-                        selectedGame.name,
-
-                        style =
-                            MaterialTheme.typography
-                                .headlineSmall,
-
-                        fontWeight =
-                            FontWeight.Bold
-                    )
-
-                    Text(
-                        selectedGame.packageName,
-
-                        style =
-                            MaterialTheme.typography
-                                .bodySmall,
-
-                        color =
-                            MaterialTheme.colorScheme
-                                .onSurfaceVariant
-                    )
-
-                    Spacer(
-                        Modifier.height(20.dp)
-                    )
-
-                    Button(
-
-                        onClick = {
-                            onLaunchGame(
-                                selectedGame.packageName
-                            )
-                        },
-
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .height(58.dp)
-                    ) {
-
-                        Icon(
-                            Icons.Default.PlayArrow,
-                            null
-                        )
-
-                        Spacer(
-                            Modifier.width(8.dp)
-                        )
-
-                        Text(
-                            "INICIAR JOGO + KOVICK",
-                            fontWeight =
-                                FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(
-                        Modifier.height(10.dp)
-                    )
-
-                    OutlinedButton(
-
-                        onClick =
-                            onAddGame,
-
-                        modifier =
-                            Modifier.fillMaxWidth()
-                    ) {
-
-                        Icon(
-                            Icons.Default.Add,
-                            null
-                        )
-
-                        Spacer(
-                            Modifier.width(8.dp)
-                        )
-
-                        Text(
-                            "TROCAR JOGO"
-                        )
-                    }
-                }
-
-                Spacer(
-                    Modifier.weight(1f)
-                )
-
-                Text(
-                    "PRIMEIRO USO",
-                    fontWeight =
-                        FontWeight.Bold
-                )
-
-                Text(
-                    "Ative a Acessibilidade do Kovick para o botão flutuante aparecer sobre o jogo.",
-
-                    color =
-                        MaterialTheme.colorScheme
-                            .onSurfaceVariant
-                )
-
-                Spacer(
-                    Modifier.height(8.dp)
-                )
-
-                OutlinedButton(
-
-                    onClick =
-                        onAccessibility,
-
-                    modifier =
-                        Modifier.fillMaxWidth()
-                ) {
-
-                    Text(
-                        "ATIVAR KOVICK"
-                    )
-                }
-            }
-        }
-
-        Card(
-
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-
-            shape =
-                RoundedCornerShape(28.dp)
-        ) {
-
-            Column(
-                modifier =
-                    Modifier.padding(24.dp)
-            ) {
-
-                Text(
-                    "APLICATIVOS",
-
-                    style =
-                        MaterialTheme.typography
-                            .titleLarge,
-
-                    fontWeight =
-                        FontWeight.Bold
-                )
-
-                Text(
-                    "Escolha o jogo que receberá o perfil.",
-
-                    color =
-                        MaterialTheme.colorScheme
-                            .onSurfaceVariant
-                )
-
-                Spacer(
-                    Modifier.height(12.dp)
-                )
-
-                LazyColumn(
-
-                    verticalArrangement =
-                        Arrangement.spacedBy(8.dp)
-                ) {
-
-                    items(games) { game ->
-
-                        GameListItem(
-
-                            game = game,
-
-                            selected =
-                                selectedGame
-                                    ?.packageName ==
-                                    game.packageName,
-
-                            onClick = {
-                                onSelectGame(game)
-                            }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EmptyGameState(
-    onAddGame: () -> Unit
-) {
-
-    Column(
-
-        modifier =
-            Modifier.fillMaxWidth(),
-
-        horizontalAlignment =
-            Alignment.CenterHorizontally
-    ) {
-
-        Icon(
-
-            Icons.Default.Gamepad,
-
-            contentDescription = null,
-
-            modifier =
-                Modifier.size(64.dp),
-
-            tint =
-                MaterialTheme.colorScheme
-                    .primary
-        )
-
-        Spacer(
-            Modifier.height(14.dp)
-        )
-
-        Text(
-            "Nenhum jogo selecionado",
-            fontWeight =
-                FontWeight.Bold
-        )
-
-        Text(
-            "Escolha um aplicativo instalado para criar seu perfil.",
-
-            color =
-                MaterialTheme.colorScheme
-                    .onSurfaceVariant
-        )
-
-        Spacer(
-            Modifier.height(18.dp)
-        )
-
-        Button(
-            onClick =
-                onAddGame
-        ) {
-
-            Icon(
-                Icons.Default.Add,
-                null
-            )
-
-            Spacer(
-                Modifier.width(8.dp)
-            )
-
-            Text(
-                "ADICIONAR JOGO"
-            )
-        }
-    }
-}
-
-@Composable
-private fun GameListItem(
-    game: InstalledGame,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-
-    Surface(
-
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clickable(
-                    onClick = onClick
-                ),
-
-        shape =
-            RoundedCornerShape(16.dp),
-
-        color =
-            if (selected)
-                MaterialTheme.colorScheme
-                    .primary
-                    .copy(alpha = 0.18f)
-            else
-                MaterialTheme.colorScheme
-                    .surfaceVariant
-    ) {
-
-        Row(
-
-            modifier =
-                Modifier.padding(14.dp),
-
-            verticalAlignment =
-                Alignment.CenterVertically
-        ) {
-
-            Icon(
-
-                Icons.Default.Gamepad,
-
-                contentDescription = null,
-
-                tint =
-                    MaterialTheme.colorScheme
-                        .primary
-            )
-
-            Spacer(
-                Modifier.width(12.dp)
-            )
-
-            Column(
-                modifier =
-                    Modifier.weight(1f)
-            ) {
-
-                Text(
-                    game.name,
-                    fontWeight =
-                        FontWeight.SemiBold
-                )
-
-                Text(
-                    game.packageName,
-
-                    style =
-                        MaterialTheme.typography
-                            .bodySmall,
-
-                    color =
-                        MaterialTheme.colorScheme
-                            .onSurfaceVariant
-                )
-            }
-
-            if (selected) {
-
-                Text(
-                    "✓",
-
-                    color =
-                        MaterialTheme.colorScheme
-                            .secondary,
-
-                    fontWeight =
-                        FontWeight.Bold
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun GamePickerDialog(
-    games: List<InstalledGame>,
-    onDismiss: () -> Unit,
-    onSelect: (InstalledGame) -> Unit
-) {
-
-    AlertDialog(
-
-        onDismissRequest =
-            onDismiss,
-
-        title = {
-            Text("Escolher jogo")
-        },
-
-        text = {
-
-            LazyColumn(
-
-                modifier =
-                    Modifier.heightIn(
-                        max = 420.dp
-                    ),
-
-                verticalArrangement =
-                    Arrangement.spacedBy(6.dp)
-            ) {
-
-                items(games) { game ->
-
-                    GameListItem(
-
-                        game = game,
-
-                        selected = false,
-
-                        onClick = {
-                            onSelect(game)
+    Row(Modifier.fillMaxSize().padding(padding).padding(22.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+        Card(Modifier.weight(1.15f).fillMaxHeight(), shape = RoundedCornerShape(26.dp)) {
+            Column(Modifier.padding(24.dp)) {
+                Text("KOVICK MAPPER", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+                Text("Seu perfil de controles, por jogo.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(20.dp))
+                if (selectedGame == null) EmptyGameState(onAddGame) else {
+                    Text("JOGO SELECIONADO", color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Image(selectedGame.icon.asImageBitmap(), selectedGame.name, Modifier.size(72.dp))
+                        Spacer(Modifier.width(14.dp))
+                        Column {
+                            Text(selectedGame.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                            Text(selectedGame.packageName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                    )
+                    }
+                    Spacer(Modifier.height(18.dp))
+                    Button({ onLaunchGame(selectedGame.packageName) }, Modifier.fillMaxWidth().height(56.dp)) {
+                        Icon(Icons.Default.PlayArrow, null); Spacer(Modifier.width(8.dp)); Text("INICIAR JOGO", fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onOpenEditor, Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Build, null); Spacer(Modifier.width(8.dp)); Text("EDITAR MAPA")
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onAddGame, Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Add, null); Spacer(Modifier.width(8.dp)); Text("TROCAR JOGO")
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                Text("PRIMEIRO USO", fontWeight = FontWeight.Bold)
+                Text("Ative a Acessibilidade para preparar o botão flutuante do mapper.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onAccessibility, Modifier.fillMaxWidth()) { Text("ATIVAR KOVICK") }
+            }
+        }
+        Card(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(26.dp)) {
+            Column(Modifier.padding(20.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("JOGOS E APPS", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.weight(1f))
+                    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+                        Text("${games.size}", Modifier.padding(horizontal = 12.dp, vertical = 5.dp), fontWeight = FontWeight.Bold)
+                    }
+                }
+                Text("Aplicativos instalados com inicializador detectado.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(10.dp))
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    items(games, key = { it.packageName }) { game -> GameListItem(game, selectedGame?.packageName == game.packageName) { onSelectGame(game) } }
                 }
             }
-        },
+        }
+    }
+}
 
-        confirmButton = {
+@Composable
+private fun EmptyGameState(onAddGame: () -> Unit) {
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(Icons.Default.Gamepad, null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.height(12.dp))
+        Text("Nenhum jogo selecionado", fontWeight = FontWeight.Bold)
+        Text("Escolha um aplicativo instalado para criar seu perfil.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(16.dp))
+        Button(onAddGame) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(8.dp)); Text("ADICIONAR JOGO") }
+    }
+}
 
-            TextButton(
-                onClick =
-                    onDismiss
-            ) {
-
-                Text(
-                    "Fechar"
-                )
+@Composable
+private fun GameListItem(game: InstalledGame, selected: Boolean, onClick: () -> Unit) {
+    Surface(Modifier.fillMaxWidth().clickable(onClick = onClick), shape = RoundedCornerShape(15.dp), color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = .18f) else MaterialTheme.colorScheme.surfaceVariant) {
+        Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
+            Image(game.icon.asImageBitmap(), game.name, Modifier.size(46.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(game.name, fontWeight = FontWeight.SemiBold)
+                    if (game.isGame) { Spacer(Modifier.width(7.dp)); Text("JOGO", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold) }
+                }
+                Text(game.packageName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-        }
-    )
-}
-
-@Composable
-private fun EditorScreen(
-    padding: PaddingValues
-) {
-
-    Row(
-
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(24.dp),
-
-        horizontalArrangement =
-            Arrangement.spacedBy(16.dp)
-    ) {
-
-        EditorCard(
-            Icons.Default.Keyboard,
-            "TECLADO",
-            "WASD, atalhos e teclas"
-        )
-
-        EditorCard(
-            Icons.Default.Mouse,
-            "MOUSE",
-            "Clique, mira e movimentação"
-        )
-
-        EditorCard(
-            Icons.Default.Build,
-            "CONTROLES",
-            "Botões, swipe e macros"
-        )
-    }
-}
-
-@Composable
-private fun RowScope.EditorCard(
-    icon: ImageVector,
-    title: String,
-    subtitle: String
-) {
-
-    Card(
-
-        modifier =
-            Modifier
-                .weight(1f)
-                .fillMaxHeight(),
-
-        shape =
-            RoundedCornerShape(24.dp)
-    ) {
-
-        Column(
-            modifier =
-                Modifier.padding(22.dp)
-        ) {
-
-            Icon(
-
-                icon,
-
-                contentDescription = null,
-
-                modifier =
-                    Modifier.size(38.dp),
-
-                tint =
-                    MaterialTheme.colorScheme
-                        .primary
-            )
-
-            Spacer(
-                Modifier.height(14.dp)
-            )
-
-            Text(
-                title,
-
-                style =
-                    MaterialTheme.typography
-                        .titleLarge,
-
-                fontWeight =
-                    FontWeight.Bold
-            )
-
-            Text(
-                subtitle,
-
-                color =
-                    MaterialTheme.colorScheme
-                        .onSurfaceVariant
-            )
+            if (selected) Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.secondary)
         }
     }
 }
 
 @Composable
-private fun SettingsScreen(
-    padding: PaddingValues,
-    onAccessibility: () -> Unit,
-    onAndroidSettings: () -> Unit
-) {
-
-    Column(
-
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(24.dp),
-
-        verticalArrangement =
-            Arrangement.spacedBy(12.dp)
-    ) {
-
-        Text(
-            "CONFIGURAÇÕES",
-
-            style =
-                MaterialTheme.typography
-                    .headlineSmall,
-
-            fontWeight =
-                FontWeight.Bold
-        )
-
-        OutlinedButton(
-
-            onClick =
-                onAccessibility,
-
-            modifier =
-                Modifier.fillMaxWidth()
-        ) {
-
-            Text(
-                "ABRIR ACESSIBILIDADE"
-            )
+private fun GamePickerDialog(games: List<InstalledGame>, onDismiss: () -> Unit, onSelect: (InstalledGame) -> Unit) {
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Escolher jogo") }, text = {
+        LazyColumn(Modifier.heightIn(max = 430.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(games, key = { it.packageName }) { game -> GameListItem(game, false) { onSelect(game) } }
         }
+    }, confirmButton = { TextButton(onClick = onDismiss) { Text("Fechar") } })
+}
 
-        OutlinedButton(
-
-            onClick =
-                onAndroidSettings,
-
-            modifier =
-                Modifier.fillMaxWidth()
-        ) {
-
-            Text(
-                "CONFIGURAÇÕES DO ANDROID"
-            )
+@Composable
+private fun EditorScreen(padding: PaddingValues, selectedGame: InstalledGame?) {
+    Column(Modifier.fillMaxSize().padding(padding).padding(22.dp)) {
+        Text("EDITOR DE MAPA", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+        Text(selectedGame?.let { "Perfil: ${it.name}" } ?: "Selecione um jogo para começar", color = MaterialTheme.colorScheme.secondary)
+        Spacer(Modifier.height(16.dp))
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            EditorCard(Icons.Default.Keyboard, "TECLADO", "WASD, atalhos e teclas")
+            EditorCard(Icons.Default.Mouse, "MOUSE", "Clique, mira e movimentação")
+            EditorCard(Icons.Default.Build, "CONTROLES", "Botões, swipe e ações")
         }
+    }
+}
 
-        Text(
-            "Kovick Mapper • 0.3.0",
+@Composable
+private fun RowScope.EditorCard(icon: ImageVector, title: String, subtitle: String) {
+    Card(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(22.dp)) {
+        Column(Modifier.padding(20.dp)) {
+            Icon(icon, null, Modifier.size(42.dp), tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(14.dp))
+            Text(title, fontWeight = FontWeight.Black)
+            Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.weight(1f))
+            Text("PREPARADO PARA O OVERLAY", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+        }
+    }
+}
 
-            color =
-                MaterialTheme.colorScheme
-                    .onSurfaceVariant
-        )
+@Composable
+private fun SettingsScreen(padding: PaddingValues, onAccessibility: () -> Unit, onAndroidSettings: () -> Unit) {
+    Column(Modifier.fillMaxSize().padding(padding).padding(24.dp)) {
+        Text("CONFIGURAÇÕES", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = onAccessibility) { Text("ATIVAR ACESSIBILIDADE") }
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(onClick = onAndroidSettings) { Text("CONFIGURAÇÕES DO ANDROID") }
+        Spacer(Modifier.height(20.dp))
+        Text("KovickMapper v2", fontWeight = FontWeight.Bold)
+        Text("Perfis individuais por pacote, overlay e editor visual são a base da próxima etapa.", color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
