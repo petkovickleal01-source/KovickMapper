@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Kovick Mapper</string>
+    <string name="accessibility_description">Kovick input mapping service</string>
+</resources>
