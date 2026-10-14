@@ -1,4 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
+
     <string name="app_name">Kovick Mapper</string>
-    <string name="accessibility_description">Kovick Mapper usa o serviço de acessibilidade para executar os gestos configurados pelo usuário.</string>
+
+    <string name="accessibility_service_description">
+        Serviço do Kovick Mapper para gerenciamento de controles e mapeamentos.
+    </string>
+
 </resources>
