@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.kovick.mapper
 
 import android.content.Intent
@@ -27,11 +29,16 @@ data class Mapping(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
+            MaterialTheme(
+                colorScheme = darkColorScheme()
+            ) {
                 MapperHome(
                     onAccessibility = {
-                        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        startActivity(
+                            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                        )
                     }
                 )
             }
@@ -42,6 +49,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MapperHome(onAccessibility: () -> Unit) {
     var profile by remember { mutableStateOf("Free Fire") }
+
     var mappings by remember {
         mutableStateOf(
             listOf(
@@ -58,22 +66,36 @@ fun MapperHome(onAccessibility: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Kovick Mapper") },
+                title = {
+                    Text("Kovick Mapper")
+                },
                 actions = {
-                    IconButton(onClick = onAccessibility) {
-                        Icon(Icons.Default.Settings, "Configurações")
+                    IconButton(
+                        onClick = onAccessibility
+                    ) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "Configurações"
+                        )
                     }
                 }
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = {
-                mappings = mappings + Mapping("NEW", "Nova ação")
-            }) {
-                Icon(Icons.Default.Add, "Adicionar")
+            FloatingActionButton(
+                onClick = {
+                    mappings = mappings +
+                        Mapping("NEW", "Nova ação")
+                }
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = "Adicionar"
+                )
             }
         }
     ) { padding ->
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -81,32 +103,70 @@ fun MapperHome(onAccessibility: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+
             item {
-                Text("Perfil", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(6.dp))
-                Text(profile, style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.height(18.dp))
-                Button(onClick = onAccessibility, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "Perfil",
+                    style = MaterialTheme.typography.titleMedium
+                )
+
+                Spacer(
+                    Modifier.height(6.dp)
+                )
+
+                Text(
+                    profile,
+                    style = MaterialTheme.typography.headlineSmall
+                )
+
+                Spacer(
+                    Modifier.height(18.dp)
+                )
+
+                Button(
+                    onClick = onAccessibility,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text("Ativar serviço do Kovick Mapper")
                 }
-                Spacer(Modifier.height(10.dp))
+
+                Spacer(
+                    Modifier.height(10.dp)
+                )
+
                 Text(
-                    "A base já está preparada para perfis, mapeamentos e gestos. O modo mira será conectado à camada de entrada na próxima etapa.",
+                    "A base já está preparada para perfis, " +
+                            "mapeamentos e gestos. O modo mira será " +
+                            "conectado à camada de entrada na próxima etapa.",
                     style = MaterialTheme.typography.bodyMedium
                 )
-                Spacer(Modifier.height(10.dp))
+
+                Spacer(
+                    Modifier.height(10.dp)
+                )
             }
+
             items(mappings) { mapping ->
-                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+
                         AssistChip(
                             onClick = {},
-                            label = { Text(mapping.key) }
+                            label = {
+                                Text(mapping.key)
+                            }
                         )
-                        Spacer(Modifier.width(12.dp))
+
+                        Spacer(
+                            Modifier.width(12.dp)
+                        )
+
                         Text(mapping.action)
                     }
                 }
