@@ -3,6 +3,10 @@
 
     <string name="app_name">Kovick Mapper</string>
 
+    <string name="accessibility_description">
+        Serviço do Kovick Mapper para gerenciamento de controles e mapeamentos.
+    </string>
+
     <string name="accessibility_service_description">
         Serviço do Kovick Mapper para gerenciamento de controles e mapeamentos.
     </string>
