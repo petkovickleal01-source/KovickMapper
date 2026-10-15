@@ -38,6 +38,7 @@ class MainActivity : ComponentActivity() {
         showHome()
     }
 
+    @Suppress("DEPRECATION")
     override fun onBackPressed() {
         showHome()
     }
@@ -113,8 +114,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    @Composable
     private fun showPermissions() {
+        setContent { PermissionsScreen() }
+    }
+
+    @Composable
+    private fun PermissionsScreen() {
         MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = KovickRed)) {
             Column(Modifier.fillMaxSize().padding(20.dp)) {
                 Header("Permissões") { showSettings() }
@@ -135,8 +140,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    @Composable
     private fun showActivationMode() {
+        setContent { ActivationModeScreen() }
+    }
+
+    @Composable
+    private fun ActivationModeScreen() {
         MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = KovickRed)) {
             Column(Modifier.fillMaxSize().padding(20.dp)) {
                 Header("Modo de ativação") { showSettings() }
