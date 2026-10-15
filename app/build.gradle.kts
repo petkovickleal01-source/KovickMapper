@@ -37,4 +37,7 @@ dependencies {
     implementation("androidx.compose.material3:material3:1.3.1")
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
     implementation("androidx.lifecycle:lifecycle-service:2.8.7")
+
+    // Wireless ADB pairing/connection engine.
+    implementation(project(":wirelessdebug"))
 }
