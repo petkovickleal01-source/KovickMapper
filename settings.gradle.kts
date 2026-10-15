@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "KovickMapper"
 include(":app")
+include(":wirelessdebug")
