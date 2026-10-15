@@ -16,6 +16,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Fetch wireless ADB pairing engine
+        run: |
+          git clone --depth 1 https://github.com/xswl369/android-wireless-debug.git wirelessdebug
+
       - name: Setup Java 17
         uses: actions/setup-java@v5
         with:
