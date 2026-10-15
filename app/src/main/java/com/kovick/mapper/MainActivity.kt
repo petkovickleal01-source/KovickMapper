@@ -25,12 +25,21 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.LaunchedEffect
 
 private val KovickRed = Color(0xFFD50000)
+private val KovickGreen = Color(0xFF19A957)
+private val KovickError = Color(0xFFD32F2F)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,6 +52,11 @@ class MainActivity : ComponentActivity() {
         showHome()
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (hasWindowFocus()) showHome()
+    }
+
     private fun showHome() {
         setContent { HomeScreen() }
     }
@@ -50,6 +64,8 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun HomeScreen() {
         MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = KovickRed)) {
+            val wirelessStatus = rememberWirelessDebugStatus()
+
             Column(Modifier.fillMaxSize().padding(20.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -62,7 +78,33 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                Spacer(Modifier.height(28.dp))
+                Spacer(Modifier.height(20.dp))
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(18.dp)) {
+                        Text("Depuração Wi-Fi", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            wirelessStatus.text,
+                            color = wirelessStatus.color,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(18.dp)) {
+                        Text("Conexão Kovick", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            if (wirelessStatus.connected) "🟢 Conexão estabelecida" else "🔴 Depuração falhou",
+                            color = if (wirelessStatus.connected) KovickGreen else KovickError,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(18.dp))
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(18.dp)) {
                         Text("Kovick Mapper", style = MaterialTheme.typography.titleLarge)
@@ -77,6 +119,24 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    @Composable
+    private fun rememberWirelessDebugStatus(): WirelessDebugStatus {
+        var status by remember { mutableStateOf(WirelessDebugStatus.checking()) }
+
+        LaunchedEffect(Unit) {
+            while (true) {
+                status = WirelessDebugStatus.from(this@MainActivity)
+                delay(1500)
+            }
+        }
+
+        DisposableEffect(Unit) {
+            onDispose { }
+        }
+
+        return status
     }
 
     @Composable
@@ -195,5 +255,45 @@ class MainActivity : ComponentActivity() {
         KovickProfileStore.savePoint(this, KeyEvent.KEYCODE_A, .35f, .50f)
         KovickProfileStore.savePoint(this, KeyEvent.KEYCODE_S, .50f, .65f)
         KovickProfileStore.savePoint(this, KeyEvent.KEYCODE_D, .65f, .50f)
+    }
+}
+
+private data class WirelessDebugStatus(
+    val text: String,
+    val color: Color,
+    val connected: Boolean
+) {
+    companion object {
+        fun checking() = WirelessDebugStatus(
+            "Checando Depuração Wi-Fi...",
+            KovickRed,
+            false
+        )
+
+        fun from(context: android.content.Context): WirelessDebugStatus {
+            val enabled = try {
+                Settings.Global.getInt(
+                    context.contentResolver,
+                    "adb_wifi_enabled",
+                    0
+                ) == 1
+            } catch (_: Exception) {
+                false
+            }
+
+            return if (enabled) {
+                WirelessDebugStatus(
+                    "Ativa",
+                    KovickGreen,
+                    true
+                )
+            } else {
+                WirelessDebugStatus(
+                    "Depuração falhou",
+                    KovickError,
+                    false
+                )
+            }
+        }
     }
 }
