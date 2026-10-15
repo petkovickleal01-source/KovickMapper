@@ -24,6 +24,8 @@ jobs:
           sed -i "s/sourceCompatibility JavaVersion.VERSION_1_8/sourceCompatibility JavaVersion.VERSION_17/" wirelessdebug/wirelessdebug/build.gradle
           sed -i "s/targetCompatibility JavaVersion.VERSION_1_8/targetCompatibility JavaVersion.VERSION_17/" wirelessdebug/wirelessdebug/build.gradle
           sed -i "/api 'androidx.appcompat:appcompat:1.6.1'/a\    implementation 'androidx.core:core-ktx:1.15.0'" wirelessdebug/wirelessdebug/build.gradle
+          sed -i "/Tesseract4Android/d" wirelessdebug/wirelessdebug/build.gradle
+          rm -f wirelessdebug/wirelessdebug/src/main/java/com/wirelessdebug/service/ScreenOcr.java
 
       - name: Setup Java 17
         uses: actions/setup-java@v5
