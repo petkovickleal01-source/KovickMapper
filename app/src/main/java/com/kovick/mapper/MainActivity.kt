@@ -37,6 +37,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.wirelessdebug.WdbContext
+import com.wirelessdebug.service.AdbShellController
 import kotlinx.coroutines.delay
 
 private val KovickRed = Color(0xFFD50000)
@@ -46,6 +48,7 @@ private val KovickError = Color(0xFFD32F2F)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WdbContext.init(this)
         showHome()
     }
 
@@ -99,7 +102,7 @@ class MainActivity : ComponentActivity() {
                         Text("Conexão Kovick", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            if (wirelessStatus.connected) "🟢 Conexão estabelecida" else "🔴 Depuração falhou",
+                            if (wirelessStatus.connected) "🟢 Conexão estabelecida" else "🔴 Não conectado",
                             color = if (wirelessStatus.connected) KovickGreen else KovickError,
                             style = MaterialTheme.typography.bodyLarge
                         )
@@ -246,6 +249,12 @@ class MainActivity : ComponentActivity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 7101)
         }
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.NEARBY_WIFI_DEVICES), 7102)
+        }
+
         val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
         if (intent.resolveActivity(packageManager) != null) {
             startActivity(intent)
@@ -287,14 +296,24 @@ private data class WirelessDebugStatus(
                 false
             }
 
-            return if (enabled) {
-                WirelessDebugStatus(
-                    "Ativa",
+            val connected = try {
+                AdbShellController.isConnected()
+            } catch (_: Throwable) {
+                false
+            }
+
+            return when {
+                connected -> WirelessDebugStatus(
+                    "Conexão estabelecida",
                     KovickGreen,
                     true
                 )
-            } else {
-                WirelessDebugStatus(
+                enabled -> WirelessDebugStatus(
+                    "Depuração ativa",
+                    KovickGreen,
+                    false
+                )
+                else -> WirelessDebugStatus(
                     "Depuração falhou",
                     KovickError,
                     false
