@@ -1,7 +1,10 @@
 package com.kovick.mapper
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.KeyEvent
@@ -237,12 +240,20 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openWirelessDebugSettings() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 7101)
+        }
+
         val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
         if (intent.resolveActivity(packageManager) != null) {
             startActivity(intent)
         } else {
             startActivity(Intent(Settings.ACTION_SETTINGS))
         }
+
+        KovickPairingNotification.show(this)
     }
 
     private fun installDefaultProfile() {
