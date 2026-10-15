@@ -14,41 +14,103 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+
+private val KovickRed = Color(0xFFD50000)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { Screen() }
+        setContent { MainScreen() }
     }
 
     @Composable
-    private fun Screen() {
-        MaterialTheme {
-            Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
-                Text("Kovick Mapper", style = MaterialTheme.typography.headlineMedium)
-                Text("Fase 1 — motor funcional")
-                Spacer(Modifier.height(18.dp))
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(18.dp)) {
-                        Text("Mapa padrão")
-                        Text("W / A / S / D → pontos de toque")
-                        Text("As posições são salvas no perfil ativo.")
+    private fun MainScreen() {
+        MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = KovickRed)) {
+            Column(Modifier.fillMaxSize().padding(20.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("KOVICK", style = MaterialTheme.typography.headlineMedium, color = KovickRed)
+                    IconButton(onClick = { showSettings() }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Configurações", tint = KovickRed)
                     }
                 }
-                Spacer(Modifier.height(18.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button({ startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }, Modifier.weight(1f)) { Text("Acessibilidade") }
-                    Button({ startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)) }, Modifier.weight(1f)) { Text("Overlay") }
+
+                Spacer(Modifier.height(28.dp))
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(18.dp)) {
+                        Text("Kovick Mapper")
+                        Text("Gerencie seus perfis e mapeamentos de jogos.")
+                    }
                 }
-                Spacer(Modifier.height(10.dp))
-                Button({ installDefaultProfile() }, Modifier.fillMaxWidth()) { Text("INSTALAR MAPA PADRÃO") }
+
+                Spacer(Modifier.height(18.dp))
+                Button({ installDefaultProfile() }, Modifier.fillMaxWidth()) {
+                    Text("ADICIONAR JOGO")
+                }
+            }
+        }
+    }
+
+    private fun showSettings() {
+        setContent { SettingsScreen() }
+    }
+
+    @Composable
+    private fun SettingsScreen() {
+        MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = KovickRed)) {
+            Column(Modifier.fillMaxSize().padding(20.dp)) {
+                Text("Configurações", style = MaterialTheme.typography.headlineMedium, color = KovickRed)
+                Spacer(Modifier.height(20.dp))
+
+                Button(onClick = { showPermissions() }, Modifier.fillMaxWidth()) {
+                    Text("Permissões")
+                }
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = { showActivationMode() }, Modifier.fillMaxWidth()) {
+                    Text("Modo de ativação")
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun showPermissions() {
+        Column(Modifier.fillMaxSize().padding(20.dp)) {
+            Text("Permissões", style = MaterialTheme.typography.headlineMedium, color = KovickRed)
+            Spacer(Modifier.height(20.dp))
+            Button({ startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)) }, Modifier.fillMaxWidth()) {
+                Text("Sobreposição de tela")
+            }
+            Spacer(Modifier.height(10.dp))
+            Button({ }, Modifier.fillMaxWidth()) { Text("Detectar jogo aberto") }
+            Spacer(Modifier.height(10.dp))
+            Button({ }, Modifier.fillMaxWidth()) { Text("Bateria sem restrição") }
+        }
+    }
+
+    @Composable
+    private fun showActivationMode() {
+        Column(Modifier.fillMaxSize().padding(20.dp)) {
+            Text("Modo de ativação", style = MaterialTheme.typography.headlineMedium, color = KovickRed)
+            Spacer(Modifier.height(20.dp))
+            Button({ }, Modifier.fillMaxWidth()) {
+                Text("Depuração Wi-Fi (para ativação)")
             }
         }
     }
