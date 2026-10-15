@@ -27,11 +27,11 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
-        run: yes | sdkmanager --licenses >/dev/null 2>&1 || true
+      - name: Prepare Android SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Build APK
         run: gradle --no-daemon assembleDebug
