@@ -3,7 +3,6 @@ package com.kovick.mapper
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.graphics.Path
-import android.util.DisplayMetrics
 import android.view.KeyEvent
 
 class KovickAccessibilityService : AccessibilityService() {
@@ -26,43 +25,39 @@ class KovickAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) = Unit
+
     override fun onInterrupt() {
         pressedKeys.clear()
+        dispatchGesture(GestureDescription.Builder().build(), null, null)
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
-        val keyCode = event.keyCode
-        val mapped = KovickProfileStore.point(this, keyCode) ?: return false
+        if (KovickProfileStore.point(this, event.keyCode) == null) return false
 
         when (event.action) {
             KeyEvent.ACTION_DOWN -> {
                 if (event.repeatCount == 0) {
-                    pressedKeys.add(keyCode)
+                    pressedKeys.add(event.keyCode)
                     dispatchMappedKeys()
                 }
                 return true
             }
 
             KeyEvent.ACTION_UP -> {
-                if (pressedKeys.remove(keyCode)) {
+                if (pressedKeys.remove(event.keyCode)) {
                     dispatchMappedKeys()
                 }
                 return true
             }
         }
 
-        return mapped.let { true }
+        return true
     }
 
     private fun dispatchMappedKeys() {
-        if (pressedKeys.isEmpty()) {
-            dispatchGesture(GestureDescription.Builder().build(), null, null)
-            return
-        }
-
-        val metrics = resources.displayMetrics
         val builder = GestureDescription.Builder()
-        var duration = 1L
+        val metrics = resources.displayMetrics
+        var strokes = 0
 
         pressedKeys.forEach { keyCode ->
             val point = KovickProfileStore.point(this, keyCode) ?: return@forEach
@@ -70,14 +65,23 @@ class KovickAccessibilityService : AccessibilityService() {
             val y = point.second.coerceIn(0f, 1f) * metrics.heightPixels
             val path = Path().apply { moveTo(x, y) }
             builder.addStroke(
-                GestureDescription.StrokeDescription(path, 0L, HOLD_DURATION_MS)
+                GestureDescription.StrokeDescription(
+                    path,
+                    0L,
+                    HOLD_DURATION_MS
+                )
             )
-            duration = HOLD_DURATION_MS
+            strokes++
         }
 
-        if (duration > 0L) {
+        if (strokes == 0) {
+            // Starting an empty gesture cancels the previous long-running gesture
+            // without generating another touch point.
             dispatchGesture(builder.build(), null, null)
+            return
         }
+
+        dispatchGesture(builder.build(), null, null)
     }
 
     fun tapNormalized(x: Float, y: Float) {
