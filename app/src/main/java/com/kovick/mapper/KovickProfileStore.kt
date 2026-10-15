@@ -7,8 +7,7 @@ object KovickProfileStore {
     private const val ACTIVE = "active_profile"
     private const val PROFILES = "profiles"
 
-    private fun prefs(context: Context) =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun profiles(context: Context): List<String> {
         val stored = prefs(context).getStringSet(PROFILES, null)
@@ -50,11 +49,5 @@ object KovickProfileStore {
         if (!p.contains(prefix + "x_$keyCode")) return null
         return p.getFloat(prefix + "x_$keyCode", 0.5f) to
             p.getFloat(prefix + "y_$keyCode", 0.5f)
-    }
-
-    fun points(context: Context): Map<Int, Pair<Float, Float>> {
-        val result = mutableMapOf<Int, Pair<Float, Float>>()
-        listOf(19, 29, 47, 32).forEach { key -> point(context, key)?.let { result[key] = it } }
-        return result
     }
 }
