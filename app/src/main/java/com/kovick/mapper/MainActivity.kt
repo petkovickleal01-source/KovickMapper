@@ -182,11 +182,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openWirelessDebugSettings() {
-        try {
-            startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))
-        } catch (_: Exception) {
-            startActivity(Intent(Settings.ACTION_DEVELOPMENT_SETTINGS))
-        }
+        startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))
     }
 
     private fun installDefaultProfile() {
