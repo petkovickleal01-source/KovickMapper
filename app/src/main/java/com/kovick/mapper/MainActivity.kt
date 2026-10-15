@@ -25,17 +25,16 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
-import androidx.compose.runtime.LaunchedEffect
 
 private val KovickRed = Color(0xFFD50000)
 private val KovickGreen = Color(0xFF19A957)
@@ -130,10 +129,6 @@ class MainActivity : ComponentActivity() {
                 status = WirelessDebugStatus.from(this@MainActivity)
                 delay(1500)
             }
-        }
-
-        DisposableEffect(Unit) {
-            onDispose { }
         }
 
         return status
