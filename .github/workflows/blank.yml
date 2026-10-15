@@ -43,3 +43,5 @@ jobs:
           name: KovickMapper-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+# Trigger build after Kotlin compile fixes.
