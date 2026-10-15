@@ -1,324 +1,407 @@
 package com.kovick.mapper
 
-import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
+import android.content.pm.ActivityInfo
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.nativeKeyEvent
 import androidx.compose.ui.unit.dp
-import com.wirelessdebug.WdbContext
-import com.wirelessdebug.service.AdbShellController
-import kotlinx.coroutines.delay
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import kotlin.math.hypot
+import kotlin.math.roundToInt
 
 private val KovickRed = Color(0xFFD50000)
-private val KovickGreen = Color(0xFF19A957)
-private val KovickError = Color(0xFFD32F2F)
+private val KovickDark = Color(0xFF08080B)
+private val KovickPanel = Color(0xFF121218)
+
+private data class MapPoint(val keyCode: Int, val label: String, val position: Offset)
 
 class MainActivity : ComponentActivity() {
+    private var editorOpen = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        WdbContext.init(this)
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         showHome()
     }
 
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
-        showHome()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        if (hasWindowFocus()) showHome()
+        if (editorOpen) {
+            editorOpen = false
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            showHome()
+        } else {
+            super.onBackPressed()
+        }
     }
 
     private fun showHome() {
         setContent { HomeScreen() }
     }
 
+    private fun openEditor(profile: String) {
+        KovickProfileStore.setActiveProfile(this, profile)
+        editorOpen = true
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        setContent { MapperEditorScreen(profile) }
+    }
+
     @Composable
     private fun HomeScreen() {
-        MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = KovickRed)) {
-            val wirelessStatus = rememberWirelessDebugStatus()
+        var profiles by remember { mutableStateOf(KovickProfileStore.profiles(this)) }
+        var showAdd by remember { mutableStateOf(false) }
 
-            Column(Modifier.fillMaxSize().padding(20.dp)) {
+        MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = KovickRed)) {
+            Column(Modifier.fillMaxSize().padding(18.dp)) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("KOVICK", style = MaterialTheme.typography.headlineMedium, color = KovickRed)
+                    Column {
+                        Text("KOVICK", color = KovickRed, style = MaterialTheme.typography.headlineMedium)
+                        Text("Mouse & Keyboard Mapper", style = MaterialTheme.typography.bodyMedium)
+                    }
                     IconButton(onClick = { showSettings() }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Configurações", tint = KovickRed)
+                        Icon(Icons.Default.Settings, "Configurações", tint = KovickRed)
                     }
                 }
 
-                Spacer(Modifier.height(20.dp))
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(18.dp)) {
-                        Text("Depuração Wi-Fi", style = MaterialTheme.typography.titleMedium)
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            wirelessStatus.text,
-                            color = wirelessStatus.color,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
+                Spacer(Modifier.height(18.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Meus jogos", style = MaterialTheme.typography.titleLarge)
+                    OutlinedButton(onClick = { showAdd = true }) {
+                        Icon(Icons.Default.Add, null)
+                        Text("  Jogo")
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(profiles) { profile ->
+                        Card(Modifier.fillMaxWidth()) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column {
+                                    Text(profile, style = MaterialTheme.typography.titleMedium)
+                                    Text("Perfil de mapeamento", style = MaterialTheme.typography.bodySmall)
+                                }
+                                Button(onClick = { openEditor(profile) }) { Text("EDITAR") }
+                            }
+                        }
                     }
                 }
 
                 Spacer(Modifier.height(12.dp))
                 Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(18.dp)) {
-                        Text("Conexão Kovick", style = MaterialTheme.typography.titleMedium)
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            if (wirelessStatus.connected) "🟢 Conexão estabelecida" else "🔴 Não conectado",
-                            color = if (wirelessStatus.connected) KovickGreen else KovickError,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
+                    Column(Modifier.padding(16.dp)) {
+                        Text("Como funciona", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(4.dp))
+                        Text("Abra um jogo, entre no editor em paisagem e arraste os pontos para os locais desejados.")
+                        Text("Selecione um ponto e pressione uma tecla para definir o comando.")
                     }
                 }
+            }
+        }
 
-                Spacer(Modifier.height(18.dp))
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(18.dp)) {
-                        Text("Kovick Mapper", style = MaterialTheme.typography.titleLarge)
-                        Spacer(Modifier.height(6.dp))
-                        Text("Gerencie seus perfis e mapeamentos de jogos.")
+        if (showAdd) {
+            AddGameDialog(
+                onDismiss = { showAdd = false },
+                onAdd = { name ->
+                    if (KovickProfileStore.addProfile(this, name)) {
+                        profiles = KovickProfileStore.profiles(this)
+                        showAdd = false
                     }
                 }
+            )
+        }
+    }
 
-                Spacer(Modifier.height(18.dp))
-                Button(onClick = { installDefaultProfile() }, Modifier.fillMaxWidth()) {
-                    Text("ADICIONAR JOGO")
+    @Composable
+    private fun AddGameDialog(onDismiss: () -> Unit, onAdd: (String) -> Unit) {
+        var name by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Adicionar jogo") },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    singleLine = true,
+                    label = { Text("Nome do jogo") }
+                )
+            },
+            confirmButton = { TextButton(onClick = { onAdd(name) }) { Text("Adicionar") } },
+            dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+        )
+    }
+
+    @Composable
+    private fun MapperEditorScreen(profile: String) {
+        val points = remember {
+            mutableStateMapOf<Int, Offset>().apply {
+                val defaults = mapOf(
+                    KeyEvent.KEYCODE_W to Offset(.18f, .72f),
+                    KeyEvent.KEYCODE_A to Offset(.12f, .82f),
+                    KeyEvent.KEYCODE_S to Offset(.18f, .92f),
+                    KeyEvent.KEYCODE_D to Offset(.24f, .82f),
+                    KeyEvent.KEYCODE_SPACE to Offset(.86f, .88f)
+                )
+                defaults.forEach { (key, fallback) ->
+                    val saved = KovickProfileStore.point(this@MainActivity, key)
+                    points[key] = if (saved != null) Offset(saved.first, saved.second) else fallback
+                }
+            }
+        }
+        var selectedKey by remember { mutableStateOf<Int?>(KeyEvent.KEYCODE_W) }
+        val focusRequester = remember { FocusRequester() }
+
+        MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = KovickRed)) {
+            Row(
+                Modifier.fillMaxSize().background(KovickDark).focusRequester(focusRequester)
+                    .onPreviewKeyEvent { event ->
+                        if (event.type != KeyEventType.KeyDown || selectedKey == null) return@onPreviewKeyEvent false
+                        val newKey = event.nativeKeyEvent.keyCode
+                        if (newKey == KeyEvent.KEYCODE_ESCAPE) return@onPreviewKeyEvent false
+                        val old = selectedKey!!
+                        if (newKey != old) {
+                            val position = points.remove(old) ?: Offset(.5f, .5f)
+                            points[newKey] = position
+                            selectedKey = newKey
+                            KovickProfileStore.savePoint(this@MainActivity, newKey, position.x, position.y)
+                        }
+                        true
+                    }
+            ) {
+                Box(Modifier.weight(1f).fillMaxHeight().padding(12.dp)) {
+                    MappingSurface(points, selectedKey) { key -> selectedKey = key }
+                }
+
+                Column(
+                    Modifier.width(250.dp).fillMaxHeight().background(KovickPanel).padding(16.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = {
+                            editorOpen = false
+                            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                            showHome()
+                        }) {
+                            Icon(Icons.Default.ArrowBack, "Voltar", tint = Color.White)
+                        }
+                        Text(profile, color = Color.White, style = MaterialTheme.typography.titleLarge)
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+                    Text("MAPEAMENTO", color = KovickRed, style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        if (selectedKey == null) "Selecione um ponto" else "Ponto selecionado: ${keyName(selectedKey!!)}",
+                        color = Color.White
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text("Arraste os pontos na tela. Para trocar a tecla, selecione um ponto e pressione a nova tecla.", color = Color.LightGray)
+                    Spacer(Modifier.height(18.dp))
+                    Button(
+                        onClick = { focusRequester.requestFocus() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("CAPTURAR TECLA") }
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = { selectedKey = null },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Desselecionar") }
+                    Spacer(Modifier.height(20.dp))
+                    Text("Modo de mira", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                    Text("Preparado para a próxima camada do mapper: arrastar mouse → câmera.", color = Color.LightGray)
                 }
             }
         }
     }
 
     @Composable
-    private fun rememberWirelessDebugStatus(): WirelessDebugStatus {
-        var status by remember { mutableStateOf(WirelessDebugStatus.checking()) }
+    private fun MappingSurface(
+        points: MutableMap<Int, Offset>,
+        selectedKey: Int?,
+        onSelect: (Int) -> Unit
+    ) {
+        var sizeWidth by remember { mutableStateOf(1) }
+        var sizeHeight by remember { mutableStateOf(1) }
 
-        LaunchedEffect(Unit) {
-            while (true) {
-                status = WirelessDebugStatus.from(this@MainActivity)
-                delay(1500)
-            }
-        }
-
-        return status
-    }
-
-    @Composable
-    private fun Header(title: String, onBack: () -> Unit) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            Modifier.fillMaxSize().background(Color(0xFF050507), RoundedCornerShape(18.dp))
+                .pointerInput(points) {
+                    detectDragGestures(
+                        onDragStart = { start ->
+                            val nearest = nearestPoint(points, start, sizeWidth.toFloat(), sizeHeight.toFloat())
+                            if (nearest != null) onSelect(nearest)
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            val key = selectedKey ?: return@detectDragGestures
+                            val current = points[key] ?: return@detectDragGestures
+                            val nx = (current.x + dragAmount.x / sizeWidth).coerceIn(.03f, .97f)
+                            val ny = (current.y + dragAmount.y / sizeHeight).coerceIn(.03f, .97f)
+                            val next = Offset(nx, ny)
+                            points[key] = next
+                            KovickProfileStore.savePoint(this@MainActivity, key, nx, ny)
+                        }
+                    )
+                }
         ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Voltar", tint = KovickRed)
+            Canvas(
+                Modifier.fillMaxSize().then(
+                    Modifier.pointerInput(Unit) { }
+                )
+            ) {
+                sizeWidth = size.width.roundToInt()
+                sizeHeight = size.height.roundToInt()
+                drawEditorGrid(this)
+                points.forEach { (key, position) ->
+                    val x = position.x * size.width
+                    val y = position.y * size.height
+                    val selected = key == selectedKey
+                    drawCircle(if (selected) KovickRed else Color(0xCC25252D), if (selected) 34f else 29f, Offset(x, y))
+                    drawCircle(Color.White, 2.5f, Offset(x, y))
+                }
             }
-            Text(title, style = MaterialTheme.typography.headlineMedium, color = KovickRed)
         }
+    }
+
+    private fun drawEditorGrid(scope: DrawScope) {
+        val stepX = scope.size.width / 10f
+        val stepY = scope.size.height / 6f
+        for (i in 1 until 10) {
+            scope.drawLine(Color(0x22111111), Offset(stepX * i, 0f), Offset(stepX * i, scope.size.height), 1f)
+        }
+        for (i in 1 until 6) {
+            scope.drawLine(Color(0x22111111), Offset(0f, stepY * i), Offset(scope.size.width, stepY * i), 1f)
+        }
+    }
+
+    private fun nearestPoint(points: Map<Int, Offset>, touch: Offset, width: Float, height: Float): Int? {
+        var result: Int? = null
+        var best = 70f
+        points.forEach { (key, pos) ->
+            val dx = pos.x * width - touch.x
+            val dy = pos.y * height - touch.y
+            val distance = hypot(dx, dy)
+            if (distance < best) {
+                best = distance
+                result = key
+            }
+        }
+        return result
+    }
+
+    private fun keyName(keyCode: Int): String = when (keyCode) {
+        KeyEvent.KEYCODE_W -> "W"
+        KeyEvent.KEYCODE_A -> "A"
+        KeyEvent.KEYCODE_S -> "S"
+        KeyEvent.KEYCODE_D -> "D"
+        KeyEvent.KEYCODE_SPACE -> "SPACE"
+        else -> "KEY $keyCode"
     }
 
     private fun showSettings() {
-        setContent { SettingsScreen() }
-    }
-
-    @Composable
-    private fun SettingsScreen() {
-        MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = KovickRed)) {
-            Column(Modifier.fillMaxSize().padding(20.dp)) {
-                Header("Configurações") { showHome() }
-                Spacer(Modifier.height(20.dp))
-
-                Button(onClick = { showPermissions() }, Modifier.fillMaxWidth()) {
-                    Text("Permissões")
-                }
-                Spacer(Modifier.height(12.dp))
-                Button(onClick = { showActivationMode() }, Modifier.fillMaxWidth()) {
-                    Text("Modo de ativação")
-                }
-            }
-        }
-    }
-
-    private fun showPermissions() {
-        setContent { PermissionsScreen() }
-    }
-
-    @Composable
-    private fun PermissionsScreen() {
-        MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = KovickRed)) {
-            Column(Modifier.fillMaxSize().padding(20.dp)) {
-                Header("Permissões") { showSettings() }
-                Spacer(Modifier.height(20.dp))
-
-                Button(onClick = { openOverlaySettings() }, Modifier.fillMaxWidth()) {
-                    Text("Sobreposição de tela")
-                }
-                Spacer(Modifier.height(10.dp))
-                Button(onClick = { openUsageAccessSettings() }, Modifier.fillMaxWidth()) {
-                    Text("Detectar jogo aberto")
-                }
-                Spacer(Modifier.height(10.dp))
-                Button(onClick = { requestUnrestrictedBattery() }, Modifier.fillMaxWidth()) {
-                    Text("Bateria sem restrição")
-                }
-            }
-        }
-    }
-
-    private fun showActivationMode() {
-        setContent { ActivationModeScreen() }
-    }
-
-    @Composable
-    private fun ActivationModeScreen() {
-        MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = KovickRed)) {
-            Column(Modifier.fillMaxSize().padding(20.dp)) {
-                Header("Modo de ativação") { showSettings() }
-                Spacer(Modifier.height(20.dp))
-                Button(onClick = { openWirelessDebugSettings() }, Modifier.fillMaxWidth()) {
-                    Text("Depuração Wi-Fi (para ativação)")
+        setContent {
+            MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = KovickRed)) {
+                Column(Modifier.fillMaxSize().padding(20.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { showHome() }) {
+                            Icon(Icons.Default.ArrowBack, "Voltar", tint = KovickRed)
+                        }
+                        Text("Configurações", style = MaterialTheme.typography.headlineMedium, color = KovickRed)
+                    }
+                    Spacer(Modifier.height(18.dp))
+                    Button(onClick = { openOverlaySettings() }, Modifier.fillMaxWidth()) { Text("Sobreposição de tela") }
+                    Spacer(Modifier.height(10.dp))
+                    Button(onClick = { openUsageAccessSettings() }, Modifier.fillMaxWidth()) { Text("Detectar jogo aberto") }
+                    Spacer(Modifier.height(10.dp))
+                    Button(onClick = { openAccessibilitySettings() }, Modifier.fillMaxWidth()) { Text("Ativar serviço Kovick") }
+                    Spacer(Modifier.height(10.dp))
+                    Button(onClick = { requestBatteryOptimization() }, Modifier.fillMaxWidth()) { Text("Bateria sem restrição") }
                 }
             }
         }
     }
 
     private fun openOverlaySettings() {
-        startActivity(
-            Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName")
-            )
-        )
+        startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
     }
 
     private fun openUsageAccessSettings() {
         startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
     }
 
-    private fun requestUnrestrictedBattery() {
-        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-            data = Uri.parse("package:$packageName")
-        }
+    private fun openAccessibilitySettings() {
+        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+    }
+
+    private fun requestBatteryOptimization() {
         try {
-            startActivity(intent)
+            startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
         } catch (_: Exception) {
             startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-        }
-    }
-
-    private fun openWirelessDebugSettings() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 7101)
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES) != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(arrayOf(Manifest.permission.NEARBY_WIFI_DEVICES), 7102)
-        }
-
-        val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
-        if (intent.resolveActivity(packageManager) != null) {
-            startActivity(intent)
-        } else {
-            startActivity(Intent(Settings.ACTION_SETTINGS))
-        }
-
-        KovickPairingNotification.show(this)
-    }
-
-    private fun installDefaultProfile() {
-        KovickProfileStore.savePoint(this, KeyEvent.KEYCODE_W, .50f, .35f)
-        KovickProfileStore.savePoint(this, KeyEvent.KEYCODE_A, .35f, .50f)
-        KovickProfileStore.savePoint(this, KeyEvent.KEYCODE_S, .50f, .65f)
-        KovickProfileStore.savePoint(this, KeyEvent.KEYCODE_D, .65f, .50f)
-    }
-}
-
-private data class WirelessDebugStatus(
-    val text: String,
-    val color: Color,
-    val connected: Boolean
-) {
-    companion object {
-        fun checking() = WirelessDebugStatus(
-            "Checando Depuração Wi-Fi...",
-            KovickRed,
-            false
-        )
-
-        fun from(context: android.content.Context): WirelessDebugStatus {
-            val enabled = try {
-                Settings.Global.getInt(
-                    context.contentResolver,
-                    "adb_wifi_enabled",
-                    0
-                ) == 1
-            } catch (_: Exception) {
-                false
-            }
-
-            val connected = try {
-                AdbShellController.isConnected()
-            } catch (_: Throwable) {
-                false
-            }
-
-            return when {
-                connected -> WirelessDebugStatus(
-                    "Conexão estabelecida",
-                    KovickGreen,
-                    true
-                )
-                enabled -> WirelessDebugStatus(
-                    "Depuração ativa",
-                    KovickGreen,
-                    false
-                )
-                else -> WirelessDebugStatus(
-                    "Depuração falhou",
-                    KovickError,
-                    false
-                )
-            }
         }
     }
 }
