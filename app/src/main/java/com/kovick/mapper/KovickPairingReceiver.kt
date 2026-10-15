@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.core.app.RemoteInput
 import com.wirelessdebug.WdbContext
 import com.wirelessdebug.service.AdbPairClient
 import com.wirelessdebug.service.AdbShellController
@@ -13,10 +14,19 @@ class KovickPairingReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != KovickPairingNotification.ACTION_PAIR) return
 
-        val code = intent.getStringExtra(KovickPairingNotification.EXTRA_CODE)
+        // RemoteInput não chega como Intent extra comum. O código digitado
+        // na notificação precisa ser lido através de RemoteInput.getResultsFromIntent().
+        val results = RemoteInput.getResultsFromIntent(intent)
+        val code = results
+            ?.getCharSequence("kovick_pairing_code_input")
+            ?.toString()
             ?.filter(Char::isDigit)
             ?.take(6)
-            ?: return
+
+        if (code.isNullOrEmpty()) {
+            Toast.makeText(context, "Digite o código de 6 dígitos", Toast.LENGTH_SHORT).show()
+            return
+        }
 
         if (code.length != 6) {
             Toast.makeText(context, "Código de pareamento inválido", Toast.LENGTH_SHORT).show()
@@ -28,8 +38,8 @@ class KovickPairingReceiver : BroadcastReceiver() {
             try {
                 WdbContext.init(context)
 
-                // O Android anuncia a porta temporária _adb-tls-pairing somente
-                // enquanto a tela "Pair using pairing code" está aberta.
+                // A porta temporária _adb-tls-pairing existe enquanto a tela
+                // "Parear usando código de pareamento" estiver aberta.
                 val pairPort = AdbShellController.findPairPort(context)
                 if (pairPort <= 0) {
                     Toast.makeText(
