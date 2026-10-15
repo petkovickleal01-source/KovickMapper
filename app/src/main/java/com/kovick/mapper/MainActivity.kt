@@ -1,6 +1,7 @@
 package com.kovick.mapper
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.view.KeyEvent
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -33,11 +35,19 @@ private val KovickRed = Color(0xFFD50000)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MainScreen() }
+        showHome()
+    }
+
+    override fun onBackPressed() {
+        showHome()
+    }
+
+    private fun showHome() {
+        setContent { HomeScreen() }
     }
 
     @Composable
-    private fun MainScreen() {
+    private fun HomeScreen() {
         MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = KovickRed)) {
             Column(Modifier.fillMaxSize().padding(20.dp)) {
                 Row(
@@ -54,16 +64,30 @@ class MainActivity : ComponentActivity() {
                 Spacer(Modifier.height(28.dp))
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(18.dp)) {
-                        Text("Kovick Mapper")
+                        Text("Kovick Mapper", style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.height(6.dp))
                         Text("Gerencie seus perfis e mapeamentos de jogos.")
                     }
                 }
 
                 Spacer(Modifier.height(18.dp))
-                Button({ installDefaultProfile() }, Modifier.fillMaxWidth()) {
+                Button(onClick = { installDefaultProfile() }, Modifier.fillMaxWidth()) {
                     Text("ADICIONAR JOGO")
                 }
             }
+        }
+    }
+
+    @Composable
+    private fun Header(title: String, onBack: () -> Unit) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Voltar", tint = KovickRed)
+            }
+            Text(title, style = MaterialTheme.typography.headlineMedium, color = KovickRed)
         }
     }
 
@@ -75,7 +99,7 @@ class MainActivity : ComponentActivity() {
     private fun SettingsScreen() {
         MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = KovickRed)) {
             Column(Modifier.fillMaxSize().padding(20.dp)) {
-                Text("Configurações", style = MaterialTheme.typography.headlineMedium, color = KovickRed)
+                Header("Configurações") { showHome() }
                 Spacer(Modifier.height(20.dp))
 
                 Button(onClick = { showPermissions() }, Modifier.fillMaxWidth()) {
@@ -91,27 +115,68 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun showPermissions() {
-        Column(Modifier.fillMaxSize().padding(20.dp)) {
-            Text("Permissões", style = MaterialTheme.typography.headlineMedium, color = KovickRed)
-            Spacer(Modifier.height(20.dp))
-            Button({ startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)) }, Modifier.fillMaxWidth()) {
-                Text("Sobreposição de tela")
+        MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = KovickRed)) {
+            Column(Modifier.fillMaxSize().padding(20.dp)) {
+                Header("Permissões") { showSettings() }
+                Spacer(Modifier.height(20.dp))
+
+                Button(onClick = { openOverlaySettings() }, Modifier.fillMaxWidth()) {
+                    Text("Sobreposição de tela")
+                }
+                Spacer(Modifier.height(10.dp))
+                Button(onClick = { openUsageAccessSettings() }, Modifier.fillMaxWidth()) {
+                    Text("Detectar jogo aberto")
+                }
+                Spacer(Modifier.height(10.dp))
+                Button(onClick = { requestUnrestrictedBattery() }, Modifier.fillMaxWidth()) {
+                    Text("Bateria sem restrição")
+                }
             }
-            Spacer(Modifier.height(10.dp))
-            Button({ }, Modifier.fillMaxWidth()) { Text("Detectar jogo aberto") }
-            Spacer(Modifier.height(10.dp))
-            Button({ }, Modifier.fillMaxWidth()) { Text("Bateria sem restrição") }
         }
     }
 
     @Composable
     private fun showActivationMode() {
-        Column(Modifier.fillMaxSize().padding(20.dp)) {
-            Text("Modo de ativação", style = MaterialTheme.typography.headlineMedium, color = KovickRed)
-            Spacer(Modifier.height(20.dp))
-            Button({ }, Modifier.fillMaxWidth()) {
-                Text("Depuração Wi-Fi (para ativação)")
+        MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = KovickRed)) {
+            Column(Modifier.fillMaxSize().padding(20.dp)) {
+                Header("Modo de ativação") { showSettings() }
+                Spacer(Modifier.height(20.dp))
+                Button(onClick = { openWirelessDebugSettings() }, Modifier.fillMaxWidth()) {
+                    Text("Depuração Wi-Fi (para ativação)")
+                }
             }
+        }
+    }
+
+    private fun openOverlaySettings() {
+        startActivity(
+            Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName")
+            )
+        )
+    }
+
+    private fun openUsageAccessSettings() {
+        startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+    }
+
+    private fun requestUnrestrictedBattery() {
+        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+            data = Uri.parse("package:$packageName")
+        }
+        try {
+            startActivity(intent)
+        } catch (_: Exception) {
+            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        }
+    }
+
+    private fun openWirelessDebugSettings() {
+        try {
+            startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))
+        } catch (_: Exception) {
+            startActivity(Intent(Settings.ACTION_DEVELOPMENT_SETTINGS))
         }
     }
 
