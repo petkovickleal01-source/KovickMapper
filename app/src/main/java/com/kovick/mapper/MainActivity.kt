@@ -53,9 +53,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.key.nativeKeyEvent
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -65,8 +63,6 @@ import kotlin.math.roundToInt
 private val KovickRed = Color(0xFFD50000)
 private val KovickDark = Color(0xFF08080B)
 private val KovickPanel = Color(0xFF121218)
-
-private data class MapPoint(val keyCode: Int, val label: String, val position: Offset)
 
 class MainActivity : ComponentActivity() {
     private var editorOpen = false
@@ -209,7 +205,7 @@ class MainActivity : ComponentActivity() {
                 )
                 defaults.forEach { (key, fallback) ->
                     val saved = KovickProfileStore.point(this@MainActivity, key)
-                    points[key] = if (saved != null) Offset(saved.first, saved.second) else fallback
+                    this[key] = if (saved != null) Offset(saved.first, saved.second) else fallback
                 }
             }
         }
@@ -221,7 +217,7 @@ class MainActivity : ComponentActivity() {
                 Modifier.fillMaxSize().background(KovickDark).focusRequester(focusRequester)
                     .onPreviewKeyEvent { event ->
                         if (event.type != KeyEventType.KeyDown || selectedKey == null) return@onPreviewKeyEvent false
-                        val newKey = event.nativeKeyEvent.keyCode
+                        val newKey = event.key.keyCode.toInt()
                         if (newKey == KeyEvent.KEYCODE_ESCAPE) return@onPreviewKeyEvent false
                         val old = selectedKey!!
                         if (newKey != old) {
@@ -280,7 +276,7 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun MappingSurface(
-        points: MutableMap<Int, Offset>,
+        points: Map<Int, Offset>,
         selectedKey: Int?,
         onSelect: (Int) -> Unit
     ) {
@@ -302,19 +298,17 @@ class MainActivity : ComponentActivity() {
                             val nx = (current.x + dragAmount.x / sizeWidth).coerceIn(.03f, .97f)
                             val ny = (current.y + dragAmount.y / sizeHeight).coerceIn(.03f, .97f)
                             val next = Offset(nx, ny)
-                            points[key] = next
+                            if (points is MutableMap<Int, Offset>) {
+                                points[key] = next
+                            }
                             KovickProfileStore.savePoint(this@MainActivity, key, nx, ny)
                         }
                     )
                 }
         ) {
-            Canvas(
-                Modifier.fillMaxSize().then(
-                    Modifier.pointerInput(Unit) { }
-                )
-            ) {
-                sizeWidth = size.width.roundToInt()
-                sizeHeight = size.height.roundToInt()
+            Canvas(Modifier.fillMaxSize()) {
+                sizeWidth = size.width.roundToInt().coerceAtLeast(1)
+                sizeHeight = size.height.roundToInt().coerceAtLeast(1)
                 drawEditorGrid(this)
                 points.forEach { (key, position) ->
                     val x = position.x * size.width
