@@ -16,20 +16,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fetch wireless ADB pairing engine
-        run: |
-          git clone --depth 1 https://github.com/xswl369/android-wireless-debug.git wirelessdebug
-          sed -i "s/version '8.2.0'/version '8.7.3'/g" wirelessdebug/build.gradle
-          sed -i "s/compileSdk 34/compileSdk 35/" wirelessdebug/wirelessdebug/build.gradle
-          sed -i "s/sourceCompatibility JavaVersion.VERSION_1_8/sourceCompatibility JavaVersion.VERSION_17/" wirelessdebug/wirelessdebug/build.gradle
-          sed -i "s/targetCompatibility JavaVersion.VERSION_1_8/targetCompatibility JavaVersion.VERSION_17/" wirelessdebug/wirelessdebug/build.gradle
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("wirelessdebug/wirelessdebug/build.gradle")
-          p.write_text('''plugins {\n    id 'com.android.library'\n}\n\nandroid {\n    namespace 'com.wirelessdebug'\n    compileSdk 35\n\n    defaultConfig {\n        minSdk 24\n        consumerProguardFiles 'proguard-rules.pro'\n    }\n\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n        encoding 'UTF-8'\n    }\n}\n\ndependencies {\n    api 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'androidx.core:core-ktx:1.15.0'\n    implementation 'org.conscrypt:conscrypt-android:2.5.2'\n    implementation 'dev.rikka.shizuku:api:12.2.0'\n    implementation 'dev.rikka.shizuku:provider:12.2.0'\n}\n''')
-          PY
-          rm -f wirelessdebug/wirelessdebug/src/main/java/com/wirelessdebug/service/ScreenOcr.java
-
       - name: Setup Java 17
         uses: actions/setup-java@v5
         with:
@@ -47,11 +33,6 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
-
-      - name: Verify Android SDK
-        run: |
-          command -v sdkmanager
-          sdkmanager --list_installed | head -n 80
 
       - name: Build APK
         run: gradle --no-daemon assembleDebug
